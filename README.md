@@ -6,12 +6,9 @@ A fork of SQLite's Lemon parser generator. See original website at [http://www.h
 
 This fork adds (or will add) the following features, which are primarily intended for my own convenience and sense of style; they are not designed specifically for everyone, and I make no judgements that my changes are objective improvements:
 
-- Better management of output files
-  `lemon` in its present form gives no control of where its outputs go or what their names are. Just about all you can do is disable the report file, plus disable the header by putting the source file into `makeheaders` mode. This fork will add commandline options to control these outputs more exactly.
-- Better C++ compatibility and modern code features
-  The `lempar.c` parser template as is (as well as `lemon`'s code generator for filling it in) makes heavy use of `#define` macros and doesn't take advantage of some C11/C++14 capabilities. This provides lots and lots of compatibility and makes `lemon` extremely ubiquitous. There is no strong motivation to change this, but it feels like an interesting challenge, and in some ways may make the resulting code more readable.
-- More version reporting.
-  `lemon -x` always displays "1.0", making it really hard to tell what version of Lemon you actually have. My guess is that some people are still using the one from 2009 that comes in the Homebrew formula. People on Debian and derivatives are getting a version that's compiled from whatever release of SQLite their Debian release is working from. This fork provides a version number based on the upstream SQLite.
+- Better management of output files: `lemon` in its present form gives no control of where its outputs go or what their names are. Just about all you can do is disable the report file, plus disable the header by putting the source file into `makeheaders` mode. This fork will add commandline options to control these outputs more exactly.
+- Better C++ compatibility and modern code features: The `lempar.c` parser template as is (as well as `lemon`'s code generator for filling it in) makes heavy use of `#define` macros and doesn't take advantage of some C11/C++14 capabilities. This provides lots and lots of compatibility and makes `lemon` extremely ubiquitous. There is no strong motivation to change this, but it feels like an interesting challenge, and in some ways may make the resulting code more readable.
+- More version reporting: `lemon -x` always displays "1.0", making it really hard to tell what version of Lemon you actually have. My guess is that some people are still using the one from 2009 that comes in the Homebrew formula. People on Debian and derivatives are getting a version that's compiled from whatever release of SQLite their Debian release is working from. This fork provides a version number based on the upstream SQLite.
 
 So far, that's all. Maybe more later.
 

@@ -34,10 +34,6 @@ VERSION = @VERSION@
 VERSION_NUMBER = @VERSION_NUMBER@
 RELEASE = @RELEASE@
 
-# Filename extensions
-#
-TEXE = @TARGET_EXEEXT@
-
 # Some standard variables and programs
 #
 prefix = @prefix@
@@ -46,14 +42,9 @@ libdir = @libdir@
 pkgconfigdir = $(libdir)/pkgconfig
 bindir = @bindir@
 includedir = @includedir@
+datadir = @datarootdir@
 INSTALL = @INSTALL@
-LIBTOOL = ./libtool
 ALLOWRELEASE = @ALLOWRELEASE@
-
-# libtool compile/link/install
-LTCOMPILE = $(LIBTOOL) --mode=compile --tag=CC $(TCC) $(LTCOMPILE_EXTRAS)
-LTLINK = $(LIBTOOL) --mode=link $(TCC) $(LTCOMPILE_EXTRAS) @LDFLAGS@ $(LTLINK_EXTRAS)
-LTINSTALL = $(LIBTOOL) --mode=install $(INSTALL)
 
 # nawk compatible awk.
 NAWK = @AWK@
@@ -64,7 +55,7 @@ NAWK = @AWK@
 # This is the default Makefile target.  The objects listed here
 # are what get build when you type just "make" with no arguments.
 #
-all:	lemon$(TEXE)
+all:	lemon
 
 Makefile: $(TOP)/Makefile.in
 	./config.status
@@ -75,21 +66,21 @@ citrus.pc: $(TOP)/citrus.pc.in
 
 # Rules to build the LEMON compiler generator
 #
-lemon$(TEXE):	$(TOP)/lemon.c $(TOP)/lempar.c
+lemon:	$(TOP)/lemon.c $(TOP)/lempar.c
 	$(TCC) $(CFLAGS) -o $@ $(TOP)/lemon.c
 
 # Standard install and cleanup targets
 #
-install:	lemon$(TEXE) citrus.pc
+install:	lemon citrus.pc
 	$(INSTALL) -d $(DESTDIR)$(bindir)
-	$(LTINSTALL) citrus$(TEXE) $(DESTDIR)$(bindir)
-	$(INSTALL) -d $(DESTDIR)$(datadir)lemon
-	$(INSTALL) -m 0644 lempar.c $(DESTDIR)$(datadir)lemon
+	$(INSTALL) -m 0755 lemon $(DESTDIR)$(bindir)
+	$(INSTALL) -d $(DESTDIR)$(datadir)/lemon
+	$(INSTALL) -m 0644 lempar.c $(DESTDIR)$(datadir)/lemon
 	$(INSTALL) -d $(DESTDIR)$(pkgconfigdir)
 	$(INSTALL) -m 0644 citrus.pc $(DESTDIR)$(pkgconfigdir)
 
 clean:
-	rm -f lemon$(TEXE)
+	rm -f lemon
 
 distclean:	clean
 	rm -f config.h config.log config.status libtool Makefile citrus.pc

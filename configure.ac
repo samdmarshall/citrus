@@ -44,7 +44,6 @@ fi
 #########
 # Programs needed
 #
-AC_PROG_LIBTOOL
 AC_PROG_INSTALL
 AC_PROG_AWK
 
@@ -81,30 +80,6 @@ VERSION_NUMBER=[`cat $srcdir/VERSION \
                 | awk '{printf "%d%03d%03d",$1,$2,$3}'`]
 AC_MSG_NOTICE(Version number set to $VERSION_NUMBER)
 AC_SUBST(VERSION_NUMBER)
-
-###########
-# Lots of things are different if we are compiling for Windows using
-# the CYGWIN environment.  So check for that special case and handle
-# things accordingly.
-#
-AC_MSG_CHECKING([if executables have the .exe suffix])
-if test "$config_BUILD_EXEEXT" = ".exe"; then
-  CYGWIN=yes
-  AC_MSG_RESULT(yes)
-else
-  AC_MSG_RESULT(unknown)
-fi
-if test "$CYGWIN" != "yes"; then
-  AC_CYGWIN
-fi
-if test x"$cross_compiling" = xno; then
-  TARGET_EXEEXT=$BUILD_EXEEXT
-else
-  TARGET_EXEEXT=$config_TARGET_EXEEXT
-fi
-
-AC_SUBST(BUILD_EXEEXT)
-AC_SUBST(TARGET_EXEEXT)
 
 #########
 # check for debug enabled

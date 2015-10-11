@@ -1,0 +1,2 @@
+#define CITRUS_VERSION "@RELEASE@"
+

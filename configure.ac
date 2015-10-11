@@ -103,4 +103,5 @@ AC_SUBST(BUILD_CFLAGS)
 AC_OUTPUT([
 Makefile
 citrus.pc
+version.h
 ])

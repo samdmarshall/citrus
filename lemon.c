@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "version.h"
 
 #ifndef __WIN32__
 #   if defined(_WIN32) || defined(WIN32)
@@ -1538,7 +1539,7 @@ int main(int argc, char **argv)
 
   OptInit(argv,options,stderr);
   if( version ){
-     printf("Lemon version 1.0\n");
+     printf("Lemon 2015.09.08 with Citrus " CITRUS_VERSION "\n");
      exit(0); 
   }
   if( OptNArgs()!=1 ){

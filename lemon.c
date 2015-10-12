@@ -192,7 +192,7 @@ struct s_options {
   char *arg;
   const char *message;
 };
-int    OptInit(char**,struct s_options*,FILE*);
+int    OptInit(char**,struct s_options*,FILE*,void*);
 int    OptNArgs(void);
 char  *OptArg(int);
 void   OptErr(int);
@@ -395,6 +395,12 @@ struct lemon {
   int basisflag;           /* Print only basis configurations */
   int has_fallback;        /* True if any %fallback is seen in the grammar */
   int nolinenosflag;       /* True if #line statements should not be printed */
+  char *template;          /* User template to use if not NULL */
+  char *soutput;           /* Source output path if not NULL */
+  char *houtput;           /* Header output path if not NULL */
+  char *routput;           /* Report output path if not NULL */
+  int nDefine;             /* User-specified defines count */
+  char **azDefine;         /* User-specified defines */
   char *argv0;             /* Name of the program */
 };
 
@@ -1454,38 +1460,53 @@ void memory_error(){
   exit(1);
 }
 
-static int nDefine = 0;      /* Number of -D options on the command line */
-static char **azDefine = 0;  /* Name of the -D macros */
-
 /* This routine is called with the argument to each -D command-line option.
 ** Add the macro defined to the azDefine array.
 */
-static void handle_D_option(char *z){
+static void handle_D_option(char *z, struct lemon *lem){
   char **paz;
-  nDefine++;
-  azDefine = (char **) realloc(azDefine, sizeof(azDefine[0])*nDefine);
-  if( azDefine==0 ){
-    fprintf(stderr,"out of memory\n");
-    exit(1);
+  lem->nDefine++;
+  lem->azDefine = (char **) realloc(lem->azDefine, sizeof(lem->azDefine[0])*lem->nDefine);
+  if( lem->azDefine==NULL ){
+    memory_error();
   }
-  paz = &azDefine[nDefine-1];
+  paz = &lem->azDefine[lem->nDefine-1];
   *paz = (char *) malloc( lemonStrlen(z)+1 );
-  if( *paz==0 ){
-    fprintf(stderr,"out of memory\n");
-    exit(1);
+  if( *paz==NULL ){
+    memory_error();
   }
   lemon_strcpy(*paz, z);
   for(z=*paz; *z && *z!='='; z++){}
   *z = 0;
 }
 
-static char *user_templatename = NULL;
-static void handle_T_option(char *z){
-  user_templatename = (char *) malloc( lemonStrlen(z)+1 );
-  if( user_templatename==0 ){
+static void handle_T_option(char *z, struct lemon *lem){
+  lem->template = (char *) malloc( lemonStrlen(z)+1 );
+  if( lem->template==0 ){
     memory_error();
   }
-  lemon_strcpy(user_templatename, z);
+  lemon_strcpy(lem->template, z);
+}
+
+static void handle_i_option(char *z, struct lemon *lem)
+{
+  if ((lem->houtput = strdup(z)) == NULL) {
+    memory_error();
+  }
+}
+
+static void handle_o_option(char *z, struct lemon *lem)
+{
+  if ((lem->soutput = strdup(z)) == NULL) {
+    memory_error();
+  }
+}
+
+static void handle_R_option(char *z, struct lemon *lem)
+{
+  if ((lem->routput = strdup(z)) == NULL) {
+    memory_error();
+  }
 }
 
 /* forward reference */
@@ -1518,14 +1539,17 @@ int main(int argc, char **argv)
     {OPT_FSTR, "D", (char*)handle_D_option, "Define an %ifdef macro."},
     {OPT_FSTR, "f", 0, "Ignored.  (Placeholder for -f compiler options.)"},
     {OPT_FLAG, "g", (char*)&rpflag, "Print grammar without actions."},
+    {OPT_FSTR, "i", (char *)handle_i_option, "Specify the output header file. Ignored if -m is given."},
     {OPT_FSTR, "I", 0, "Ignored.  (Placeholder for '-I' compiler options.)"},
     {OPT_FLAG, "m", (char*)&mhflag, "Output a makeheaders compatible file."},
     {OPT_FLAG, "l", (char*)&nolinenosflag, "Do not print #line statements."},
+    {OPT_FSTR, "o", (char*)handle_o_option, "Specify the output source file."},
     {OPT_FSTR, "O", 0, "Ignored.  (Placeholder for '-O' compiler options.)"},
     {OPT_FLAG, "p", (char*)&showPrecedenceConflict,
                     "Show conflicts resolved by precedence rules"},
     {OPT_FLAG, "q", (char*)&quiet, "(Quiet) Don't print the report file."},
     {OPT_FLAG, "r", (char*)&noResort, "Do not sort or renumber states"},
+    {OPT_FSTR, "R", (char*)handle_R_option, "Specify the output report file. Ignored if -q is given."},
     {OPT_FLAG, "s", (char*)&statistics,
                                    "Print parser stats to standard output."},
     {OPT_FLAG, "x", (char*)&version, "Print the version number."},
@@ -1537,7 +1561,9 @@ int main(int argc, char **argv)
   int exitcode;
   struct lemon lem;
 
-  OptInit(argv,options,stderr);
+  memset(&lem, 0, sizeof(lem));
+  lem.errorcnt = 0;
+  OptInit(argv,options,stderr,&lem);
   if( version ){
      printf("Lemon 2015.09.08 with Citrus " CITRUS_VERSION "\n");
      exit(0); 
@@ -1546,8 +1572,6 @@ int main(int argc, char **argv)
     fprintf(stderr,"Exactly one filename argument is required.\n");
     exit(1);
   }
-  memset(&lem, 0, sizeof(lem));
-  lem.errorcnt = 0;
 
   /* Initialize the machine */
   Strsafe_init();
@@ -1825,7 +1849,7 @@ static char emsg[] = "Command line syntax error: ";
 /*
 ** Process a flag command line argument.
 */
-static int handleflags(int i, FILE *err)
+static int handleflags(int i, FILE *err, void *arg)
 {
   int v;
   int errcnt = 0;
@@ -1845,9 +1869,9 @@ static int handleflags(int i, FILE *err)
   }else if( op[j].type==OPT_FLAG ){
     *((int*)op[j].arg) = v;
   }else if( op[j].type==OPT_FFLAG ){
-    (*(void(*)(int))(op[j].arg))(v);
+    (*(void(*)(int,void *))(op[j].arg))(v, arg);
   }else if( op[j].type==OPT_FSTR ){
-    (*(void(*)(char *))(op[j].arg))(&argv[i][2]);
+    (*(void(*)(char *,void *))(op[j].arg))(&argv[i][2], arg);
   }else{
     if( err ){
       fprintf(err,"%smissing argument on switch.\n",emsg);
@@ -1861,7 +1885,7 @@ static int handleflags(int i, FILE *err)
 /*
 ** Process a command line switch which has an argument.
 */
-static int handleswitch(int i, FILE *err)
+static int handleswitch(int i, FILE *err, void *arg)
 {
   int lv = 0;
   double dv = 0.0;
@@ -1929,26 +1953,26 @@ static int handleswitch(int i, FILE *err)
         *(double*)(op[j].arg) = dv;
         break;
       case OPT_FDBL:
-        (*(void(*)(double))(op[j].arg))(dv);
+        (*(void(*)(double, void *))(op[j].arg))(dv, arg);
         break;
       case OPT_INT:
         *(int*)(op[j].arg) = lv;
         break;
       case OPT_FINT:
-        (*(void(*)(int))(op[j].arg))((int)lv);
+        (*(void(*)(int, void *))(op[j].arg))((int)lv, arg);
         break;
       case OPT_STR:
         *(char**)(op[j].arg) = sv;
         break;
       case OPT_FSTR:
-        (*(void(*)(char *))(op[j].arg))(sv);
+        (*(void(*)(char *, void *))(op[j].arg))(sv, arg);
         break;
     }
   }
   return errcnt;
 }
 
-int OptInit(char **a, struct s_options *o, FILE *err)
+int OptInit(char **a, struct s_options *o, FILE *err, void *arg)
 {
   int errcnt = 0;
   argv = a;
@@ -1958,9 +1982,9 @@ int OptInit(char **a, struct s_options *o, FILE *err)
     int i;
     for(i=1; argv[i]; i++){
       if( argv[i][0]=='+' || argv[i][0]=='-' ){
-        errcnt += handleflags(i,err);
+        errcnt += handleflags(i,err,arg);
       }else if( strchr(argv[i],'=') ){
-        errcnt += handleswitch(i,err);
+        errcnt += handleswitch(i,err,arg);
       }
     }
   }
@@ -2610,7 +2634,7 @@ to follow the previous rule.");
 ** macros.  This routine looks for "%ifdef" and "%ifndef" and "%endif" and
 ** comments them out.  Text in between is also commented out as appropriate.
 */
-static void preprocess_input(char *z){
+static void preprocess_input(struct lemon *lem, char *z){
   int i, j, k, n;
   int exclude = 0;
   int start = 0;
@@ -2635,8 +2659,8 @@ static void preprocess_input(char *z){
         for(j=i+7; isspace(z[j]); j++){}
         for(n=0; z[j+n] && !isspace(z[j+n]); n++){}
         exclude = 1;
-        for(k=0; k<nDefine; k++){
-          if( strncmp(azDefine[k],&z[j],n)==0 && lemonStrlen(azDefine[k])==n ){
+        for(k=0; k<lem->nDefine; k++){
+          if( strncmp(lem->azDefine[k],&z[j],n)==0 && lemonStrlen(lem->azDefine[k])==n ){
             exclude = 0;
             break;
           }
@@ -2707,7 +2731,7 @@ void Parse(struct lemon *gp)
   filebuf[filesize] = 0;
 
   /* Make an initial pass through the file to handle %ifdef and %ifndef */
-  preprocess_input(filebuf);
+  preprocess_input(gp, filebuf);
 
   /* Now scan the text of the input file */
   lineno = 1;
@@ -3102,7 +3126,17 @@ void ReportOutput(struct lemon *lemp)
   struct action *ap;
   FILE *fp;
 
-  fp = file_open(lemp,".out","wb");
+  if (lemp->routput) {
+    fp = fopen(lemp->routput, "wb");
+    if (!fp) {
+      fprintf(stderr,"Can't open file \"%s\".\n",lemp->routput);
+      ++lemp->errorcnt;
+    }
+    free(lemp->outname);
+    lemp->outname = strdup(lemp->routput);
+  } else {
+    fp = file_open(lemp,".out","wb");
+  }
   if( fp==0 ) return;
   for(i=0; i<lemp->nxstate; i++){
     stp = lemp->sorted[i];
@@ -3266,17 +3300,17 @@ PRIVATE FILE *tplt_open(struct lemon *lemp)
   char *cp;
 
   /* first, see if user specified a template filename on the command line. */
-  if (user_templatename != 0) {
-    if( access(user_templatename,004)==-1 ){
+  if (lemp->template != 0) {
+    if( access(lemp->template,004)==-1 ){
       fprintf(stderr,"Can't find the parser driver template file \"%s\".\n",
-        user_templatename);
+        lemp->template);
       lemp->errorcnt++;
       return 0;
     }
-    in = fopen(user_templatename,"rb");
+    in = fopen(lemp->template,"rb");
     if( in==0 ){
       fprintf(stderr,"Can't open the template file \"%s\".\n",
-              user_templatename);
+              lemp->template);
       lemp->errorcnt++;
       return 0;
     }
@@ -3803,7 +3837,17 @@ void ReportTable(
 
   in = tplt_open(lemp);
   if( in==0 ) return;
-  out = file_open(lemp,".c","wb");
+  if (lemp->soutput) {
+    out = fopen(lemp->soutput, "wb");
+    if (!out) {
+      fprintf(stderr,"Can't open file \"%s\".\n",lemp->soutput);
+      ++lemp->errorcnt;
+    }
+    free(lemp->outname);
+    lemp->outname = strdup(lemp->soutput);
+  } else {
+    out = file_open(lemp,".c","wb");
+  }
   if( out==0 ){
     fclose(in);
     return;
@@ -4266,7 +4310,11 @@ void ReportHeader(struct lemon *lemp)
 
   if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
   else                    prefix = "";
-  in = file_open(lemp,".h","rb");
+  if (lemp->houtput) {
+    in = fopen(lemp->houtput, "rb");
+  } else {
+    in = file_open(lemp,".h","rb");
+  }
   if( in ){
     int nextChar;
     for(i=1; i<lemp->nterminal && fgets(line,LINESIZE,in); i++){
@@ -4281,7 +4329,17 @@ void ReportHeader(struct lemon *lemp)
       return;
     }
   }
-  out = file_open(lemp,".h","wb");
+  if (lemp->houtput) {
+    out = fopen(lemp->houtput, "wb");
+    if (!out) {
+      fprintf(stderr,"Can't open file \"%s\".\n",lemp->houtput);
+      ++lemp->errorcnt;
+    }
+    free(lemp->outname);
+    lemp->outname = strdup(lemp->houtput);
+  } else {
+    out = file_open(lemp,".h","wb");
+  }
   if( out ){
     for(i=1; i<lemp->nterminal; i++){
       fprintf(out,"#define %s%-30s %3d\n",prefix,lemp->symbols[i]->name,i);

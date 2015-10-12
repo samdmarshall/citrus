@@ -4310,25 +4310,14 @@ void ReportHeader(struct lemon *lemp)
 
   if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
   else                    prefix = "";
-  if (lemp->houtput) {
-    in = fopen(lemp->houtput, "rb");
-  } else {
-    in = file_open(lemp,".h","rb");
-  }
-  if( in ){
-    int nextChar;
-    for(i=1; i<lemp->nterminal && fgets(line,LINESIZE,in); i++){
-      lemon_sprintf(pattern,"#define %s%-30s %3d\n",
-                    prefix,lemp->symbols[i]->name,i);
-      if( strcmp(line,pattern) ) break;
-    }
-    nextChar = fgetc(in);
-    fclose(in);
-    if( i==lemp->nterminal && nextChar==EOF ){
-      /* No change in the file.  Don't rewrite it. */
-      return;
-    }
-  }
+  /* The original logic in this route will open the header for reading if it
+   * exists, read the whole thing in, and compare it with what will be generated
+   * to decide whether to rewrite it. This is doing 90% of the work of just
+   * rewriting it over again, and only makes sense in filesystems where multiple
+   * short writes are MASSIVELY more expensive than multiple short reads - an
+   * amusing proposition given how the output source file is generated.
+   * Therefore, it has been removed entirely in the citrus fork.
+  */
   if (lemp->houtput) {
     out = fopen(lemp->houtput, "wb");
     if (!out) {

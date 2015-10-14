@@ -41,7 +41,6 @@ extern int access(const char *path, int mode);
 #define MAXRHS 1000
 #endif
 
-static int showPrecedenceConflict = 0;
 static char *msort(char*,char**,int(*)(const char*,const char*));
 
 /*
@@ -401,6 +400,7 @@ struct lemon {
   char *routput;           /* Report output path if not NULL */
   int nDefine;             /* User-specified defines count */
   char **azDefine;         /* User-specified defines */
+  int showPrecConflict;    /* Whether to show precedence conflicts */
   char *argv0;             /* Name of the program */
 };
 
@@ -3056,6 +3056,7 @@ char *tag;
 ** nothing was actually printed.
 */
 int PrintAction(
+  struct lemon *lemp,
   struct action *ap,          /* The action to print */
   FILE *fp,                   /* Print the action here */
   int indent                  /* Indent by this amount */
@@ -3095,7 +3096,7 @@ int PrintAction(
         indent,ap->sp->name,ap->x.stp->statenum);
       break;
     case SH_RESOLVED:
-      if( showPrecedenceConflict ){
+      if( lemp->showPrecConflict ){
         fprintf(fp,"%*s shift        %-7d -- dropped by precedence",
                 indent,ap->sp->name,ap->x.stp->statenum);
       }else{
@@ -3103,7 +3104,7 @@ int PrintAction(
       }
       break;
     case RD_RESOLVED:
-      if( showPrecedenceConflict ){
+      if( lemp->showPrecConflict ){
         fprintf(fp,"%*s reduce %-7d -- dropped by precedence",
                 indent,ap->sp->name,ap->x.rp->index);
       }else{
@@ -3163,7 +3164,7 @@ void ReportOutput(struct lemon *lemp)
     }
     fprintf(fp,"\n");
     for(ap=stp->ap; ap; ap=ap->next){
-      if( PrintAction(ap,fp,30) ) fprintf(fp,"\n");
+      if( PrintAction(lemp, ap,fp,30) ) fprintf(fp,"\n");
     }
     fprintf(fp,"\n");
   }

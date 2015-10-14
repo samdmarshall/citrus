@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <getopt.h>
 #include "version.h"
 
 #ifndef __WIN32__
@@ -181,21 +182,6 @@ void Configlist_reset(void);
 
 /********* From the file "error.h" ***************************************/
 void ErrorMsg(const char *, int,const char *, ...);
-
-/****** From the file "option.h" ******************************************/
-enum option_type { OPT_FLAG=1,  OPT_INT,  OPT_DBL,  OPT_STR,
-         OPT_FFLAG, OPT_FINT, OPT_FDBL, OPT_FSTR};
-struct s_options {
-  enum option_type type;
-  const char *label;
-  char *arg;
-  const char *message;
-};
-int    OptInit(char**,struct s_options*,FILE*,void*);
-int    OptNArgs(void);
-char  *OptArg(int);
-void   OptErr(int);
-void   OptPrint(void);
 
 /******** From the file "parse.h" *****************************************/
 void Parse(struct lemon *lemp);
@@ -1463,122 +1449,241 @@ void memory_error(){
 /* This routine is called with the argument to each -D command-line option.
 ** Add the macro defined to the azDefine array.
 */
-static void handle_D_option(char *z, struct lemon *lem){
-  char **paz;
-  lem->nDefine++;
-  lem->azDefine = (char **) realloc(lem->azDefine, sizeof(lem->azDefine[0])*lem->nDefine);
-  if( lem->azDefine==NULL ){
-    memory_error();
-  }
-  paz = &lem->azDefine[lem->nDefine-1];
-  *paz = (char *) malloc( lemonStrlen(z)+1 );
-  if( *paz==NULL ){
-    memory_error();
-  }
-  lemon_strcpy(*paz, z);
-  for(z=*paz; *z && *z!='='; z++){}
-  *z = 0;
 }
 
-static void handle_T_option(char *z, struct lemon *lem){
-  lem->template = (char *) malloc( lemonStrlen(z)+1 );
-  if( lem->template==0 ){
-    memory_error();
-  }
-  lemon_strcpy(lem->template, z);
-}
+enum ext_opt_action { oa_store_flag = 0, oa_dup_string, oa_append_strarray, oa_callback, oa_usage, oa_ignore };
 
-static void handle_i_option(char *z, struct lemon *lem)
+struct ext_option {
+    char shortname;
+    const char *longname;
+    int has_arg;
+    enum ext_opt_action action;
+    union {
+        int *flag;
+        char **str;
+        struct { int *strcount; char ***strs; } strarray;
+        struct { void (*func)(char opt, char *arg, void *data); void *data; } callback;
+    } destination;
+    const char *help;
+};
+
+static size_t strlcatc(char * restrict dest, char src, size_t size)
 {
-  if ((lem->houtput = strdup(z)) == NULL) {
-    memory_error();
-  }
+    char _src[2] = { src, 0 };
+
+    return strlcat(dest, &_src[0], size);
 }
 
-static void handle_o_option(char *z, struct lemon *lem)
+static size_t simplemin(size_t a, size_t b) { return a < b ? a : b; };
+static size_t simplemax(size_t a, size_t b) { return a > b ? a : b; };
+
+static void ext_getopt_usage(char *argv0, size_t noptions, const struct ext_option *opts, int was_help)
 {
-  if ((lem->soutput = strdup(z)) == NULL) {
-    memory_error();
-  }
+    FILE *output = was_help ? stdout : stderr;
+    
+    fprintf(output, "Usage: %s [options] input\n", argv0);
+    fprintf(output, "\n");
+    fprintf(output, "Valid commandline options for %s are:\n", argv0);
+    
+    size_t maxwidth = 0;
+    
+    for (size_t i = 0; i < noptions; ++i) {
+        if (opts[i].shortname && opts[i].longname) {
+            maxwidth = simplemax(maxwidth, strlen(opts[i].longname) + 2/*--*/ + 2/*-short*/ + 1/*|*/);
+        } else if (opts[i].longname) {
+            maxwidth = simplemax(maxwidth, strlen(opts[i].longname) + 2);
+        } else if (opts[i].shortname) {
+            maxwidth = simplemax(maxwidth, 2);
+        }
+    }
+    maxwidth = simplemax(16, maxwidth);
+    
+    size_t tabstop = (8 - (maxwidth % 8));
+    size_t helplinemax = 80 - 8 - (maxwidth + tabstop);
+    
+    for (size_t i = 0; i < noptions; ++i) {
+        char *s = NULL;
+        
+        if (opts[i].shortname && opts[i].longname) {
+            asprintf(&s, "-%c,--%s", opts[i].shortname, opts[i].longname);
+        } else if (opts[i].longname) {
+            asprintf(&s, "--%s", opts[i].longname);
+        } else if (opts[i].shortname) {
+            asprintf(&s, "-%c", opts[i].shortname);
+        } else {
+            s = strdup("???");
+        }
+        fprintf(output, "        %-*s", (int)(maxwidth + tabstop), s);
+        free(s);
+        
+        fprintf(output, "%s\n", opts[i].help);
+    }
 }
 
-static void handle_R_option(char *z, struct lemon *lem)
+// A negative return inidcates a fatal error occurred. An error message was
+// already printed. For the 'usage' action, exit(0) will be called without
+// returning. (This should be changed for a maximally-useful design.) A positive
+// return is the getopt() optind value - e.g. the number of arguments consumed
+// and the index of the first non-option arg.
+static int ext_getopt_long(int argc, char **argv, const struct ext_option *opts)
 {
-  if ((lem->routput = strdup(z)) == NULL) {
-    memory_error();
-  }
-}
+    size_t noptions = ({ const struct ext_option *o = opts; size_t i = 0; for (; o && o->help; ++i, ++o) { } i; });
+    size_t maxshort = ((noptions * 3) + 2) * sizeof(char);
+    char *short_opts = calloc(1, maxshort);
+    struct option *getopt_opts = calloc(noptions + 1, sizeof(struct option));
+    
+    strlcat(short_opts, ":", maxshort);
+    for (size_t i = 0; i < noptions; ++i) {
+        getopt_opts[i].name = opts[i].longname;
+        getopt_opts[i].has_arg = opts[i].has_arg;
+        getopt_opts[i].flag = NULL,
+        getopt_opts[i].val = 0x100 + i;
+        strlcatc(short_opts, opts[i].shortname, maxshort);
+        if (getopt_opts[i].has_arg != no_argument) {
+            strlcatc(short_opts, ':', maxshort);
+        }
+    }
+    
+    int opt = 0;
 
-/* forward reference */
-static const char *minimum_size_type(int lwr, int upr, int *pnByte);
+    while ((opt = getopt_long(argc, argv, short_opts, getopt_opts, NULL)) >= 0) {
+        if (opt < 0x100) {
+            if (opt == '?' || opt == ':') { // bad option or missing arg
+#if DEBUG
+                fprintf(stderr, "got option response %d/%c (short string %s)\n", opt, opt, short_opts);
+#endif
+                ext_getopt_usage(argv[0], noptions, opts, 0);
+                return 1;
+            }
+            for (size_t i = 0; i < noptions; ++i) {
+                if (opts[i].shortname == opt) {
+                    opt = 0x100 + i;
+                    break;
+                }
+            }
+            if (opt < 0x100) {
+#if DEBUG
+                fprintf(stderr, "unknown option char %d/%c - how??\n", opt, opt);
+#endif
+                return 1;
+            }
+        }
+        opt -= 0x100;
+        assert(opt < noptions);
+        switch (opts[opt].action) {
+            case oa_ignore: // do nothing
+                break;
+            case oa_store_flag: // save 1 in pointer
+                *(opts[opt].destination.flag) = 1;
+                break;
+            case oa_dup_string: // duplicate string into pointer
+                *(opts[opt].destination.str) = strdup(opts[opt].has_arg == no_argument ? "" : optarg);
+                break;
+            case oa_append_strarray: // append string to pointed string array
+            {
+                char ***strs = opts[opt].destination.strarray.strs;
+                int *nstrs = opts[opt].destination.strarray.strcount;
 
-/* Print a single line of the "Parser Stats" output
-*/
-static void stats_line(const char *zLabel, int iValue){
-  int nLabel = lemonStrlen(zLabel);
-  printf("  %s%.*s %5d\n", zLabel,
-         35-nLabel, "................................",
-         iValue);
+                *strs = realloc(*strs, (*nstrs + 1) * sizeof(char *));
+                (*strs)[*nstrs] = strdup(optarg);
+                *nstrs += 1;
+                break;
+            }
+            case oa_callback: // make a callback
+                (opts[opt].destination.callback.func)(opts[opt].shortname, optarg, opts[opt].destination.callback.data);
+                break;
+            case oa_usage: // print usage and exist
+                ext_getopt_usage(argv[0], noptions, opts, 1);
+                exit(0);
+        }
+    }
+    
+    int saveind = optind;
+    
+    // Allow multiple calls automatically, just in case.
+    optind = 1;
+    optreset = 1;
+    return saveind;
 }
 
 /* The main program.  Parse the command line and do it... */
 int main(int argc, char **argv)
 {
-  static int version = 0;
-  static int rpflag = 0;
-  static int basisflag = 0;
-  static int compress = 0;
-  static int quiet = 0;
-  static int statistics = 0;
-  static int mhflag = 0;
-  static int nolinenosflag = 0;
-  static int noResort = 0;
-  static struct s_options options[] = {
-    {OPT_FLAG, "b", (char*)&basisflag, "Print only the basis in report."},
-    {OPT_FLAG, "c", (char*)&compress, "Don't compress the action table."},
-    {OPT_FSTR, "D", (char*)handle_D_option, "Define an %ifdef macro."},
-    {OPT_FSTR, "f", 0, "Ignored.  (Placeholder for -f compiler options.)"},
-    {OPT_FLAG, "g", (char*)&rpflag, "Print grammar without actions."},
-    {OPT_FSTR, "i", (char *)handle_i_option, "Specify the output header file. Ignored if -m is given."},
-    {OPT_FSTR, "I", 0, "Ignored.  (Placeholder for '-I' compiler options.)"},
-    {OPT_FLAG, "m", (char*)&mhflag, "Output a makeheaders compatible file."},
-    {OPT_FLAG, "l", (char*)&nolinenosflag, "Do not print #line statements."},
-    {OPT_FSTR, "o", (char*)handle_o_option, "Specify the output source file."},
-    {OPT_FSTR, "O", 0, "Ignored.  (Placeholder for '-O' compiler options.)"},
-    {OPT_FLAG, "p", (char*)&showPrecedenceConflict,
-                    "Show conflicts resolved by precedence rules"},
-    {OPT_FLAG, "q", (char*)&quiet, "(Quiet) Don't print the report file."},
-    {OPT_FLAG, "r", (char*)&noResort, "Do not sort or renumber states"},
-    {OPT_FSTR, "R", (char*)handle_R_option, "Specify the output report file. Ignored if -q is given."},
-    {OPT_FLAG, "s", (char*)&statistics,
-                                   "Print parser stats to standard output."},
-    {OPT_FLAG, "x", (char*)&version, "Print the version number."},
-    {OPT_FSTR, "T", (char*)handle_T_option, "Specify a template file."},
-    {OPT_FSTR, "W", 0, "Ignored.  (Placeholder for '-W' compiler options.)"},
-    {OPT_FLAG,0,0,0}
-  };
-  int i;
-  int exitcode;
-  struct lemon lem;
+    int version = 0;
+    int rpflag = 0;
+    int basisflag = 0;
+    int compress = 0;
+    int quiet = 0;
+    int statistics = 0;
+    int mhflag = 0;
+    int nolinenosflag = 0;
+    int noResort = 0;
 
-  memset(&lem, 0, sizeof(lem));
-  lem.errorcnt = 0;
-  OptInit(argv,options,stderr,&lem);
-  if( version ){
-     printf("Lemon 2015.09.08 with Citrus " CITRUS_VERSION "\n");
-     exit(0); 
-  }
-  if( OptNArgs()!=1 ){
-    fprintf(stderr,"Exactly one filename argument is required.\n");
-    exit(1);
-  }
+    struct lemon lem;
+
+    memset(&lem, 0, sizeof(lem));
+    lem.errorcnt = 0;
+
+    const struct ext_option options[] = {
+        { 'b', "basis-only",            no_argument,        oa_store_flag,      { .flag = &basisflag },
+            "Print only the basis in report." },
+        { 'c', "no-compress",           no_argument,        oa_store_flag,      { .flag = &compress },
+            "Don't compress the action table." },
+        { 'D', NULL,                    required_argument,  oa_append_strarray, { .strarray = { .strcount = &lem.nDefine, .strs = &lem.azDefine } },
+            "Define a %ifdef macro." },
+        { 'f', NULL,                    required_argument,  oa_ignore,          { NULL },
+            "(Placeholder for -f compiler options.)" },
+        { 'g', "reprint-grammar",       no_argument,        oa_store_flag,      { .flag = &rpflag },
+            "Print grammar without actions." },
+        { 'i', "header-out",            required_argument,  oa_dup_string,      { .str = &lem.houtput },
+            "Output path for header file (if any)." },
+        { 'I', NULL,                    required_argument,  oa_ignore,          { NULL },
+            "(Placeholder for -I compiler options.)" },
+        { 'm', "makeheaders",           no_argument,        oa_store_flag,      { .flag = &mhflag },
+            "Output a makeheaders-compatible file." },
+        { 'l', "no-line-directives",    no_argument,        oa_store_flag,      { .flag = &nolinenosflag },
+            "Do not output #line statements in the parser." },
+        { 'o', "source-out",            required_argument,  oa_dup_string,      { .str = &lem.soutput },
+            "Output path for generated parser." },
+        { 'O', NULL,                    required_argument,  oa_ignore,          { NULL },
+            "(Placeholder for -O compiler options.)" },
+        { 'p', "precendence-conflicts", no_argument,        oa_store_flag,      { .flag = &lem.showPrecConflict },
+            "Show conflicts resolved by precedence rules." },
+        { 'q', "quiet",                 no_argument,        oa_store_flag,      { .flag = &quiet },
+            "Do not create a report file." },
+        { 'r', "no-resort",             no_argument,        oa_store_flag,      { .flag = &noResort },
+            "Do not sort or renumber states." },
+        { 'R', "report-out",            required_argument,  oa_dup_string,      { .str = &lem.routput },
+            "Output path for report (if any)." },
+        { 's', "show-statistics",       no_argument,        oa_store_flag,      { .flag = &statistics },
+            "Print parser statistics to stdout." },
+        { 'x', "version",               no_argument,        oa_store_flag,      { .flag = &version },
+            "Print the Citrus/Lemon version and exit." },
+        { 'h', "help",                  no_argument,        oa_usage,           { NULL },
+            "Show this help message." },
+        { 'T', "template",              required_argument,  oa_dup_string,      { .str = &lem.template },
+            "Specify a parser template file." },
+        { 'W', NULL,                    required_argument,  oa_ignore,          { NULL },
+            "(Placeholder for -W compiler options." },
+        { 0, NULL, no_argument, oa_ignore, { NULL }, NULL },
+    };
+    int argind = ext_getopt_long(argc, argv, options);
+    
+    if (version){
+        printf("Lemon 2015.09.08 with Citrus " CITRUS_VERSION "\n");
+        exit(0); 
+    }
+    
+    if (argind >= argc || (argc - argind) > 1) {
+        fprintf(stderr,"Exactly one filename argument is required.\n");
+        exit(1);
+    }
 
   /* Initialize the machine */
   Strsafe_init();
   Symbol_init();
   State_init();
   lem.argv0 = argv[0];
-  lem.filename = OptArg(0);
   lem.basisflag = basisflag;
   lem.nolinenosflag = nolinenosflag;
   Symbol_new("$");
@@ -1592,6 +1697,7 @@ int main(int argc, char **argv)
     fprintf(stderr,"Empty grammar.\n");
     exit(1);
   }
+    lem.filename = argv[argind];
 
   /* Count and index the symbols of the grammar */
   Symbol_new("{default}");
@@ -1794,283 +1900,6 @@ static char *msort(
   ep = 0;
   for(i=0; i<LISTSIZE; i++) if( set[i] ) ep = merge(set[i],ep,cmp,offset);
   return ep;
-}
-/************************ From the file "option.c" **************************/
-static char **argv;
-static struct s_options *op;
-static FILE *errstream;
-
-#define ISOPT(X) ((X)[0]=='-'||(X)[0]=='+'||strchr((X),'=')!=0)
-
-/*
-** Print the command line with a carrot pointing to the k-th character
-** of the n-th field.
-*/
-static void errline(int n, int k, FILE *err)
-{
-  int spcnt, i;
-  if( argv[0] ) fprintf(err,"%s",argv[0]);
-  spcnt = lemonStrlen(argv[0]) + 1;
-  for(i=1; i<n && argv[i]; i++){
-    fprintf(err," %s",argv[i]);
-    spcnt += lemonStrlen(argv[i])+1;
-  }
-  spcnt += k;
-  for(; argv[i]; i++) fprintf(err," %s",argv[i]);
-  if( spcnt<20 ){
-    fprintf(err,"\n%*s^-- here\n",spcnt,"");
-  }else{
-    fprintf(err,"\n%*shere --^\n",spcnt-7,"");
-  }
-}
-
-/*
-** Return the index of the N-th non-switch argument.  Return -1
-** if N is out of range.
-*/
-static int argindex(int n)
-{
-  int i;
-  int dashdash = 0;
-  if( argv!=0 && *argv!=0 ){
-    for(i=1; argv[i]; i++){
-      if( dashdash || !ISOPT(argv[i]) ){
-        if( n==0 ) return i;
-        n--;
-      }
-      if( strcmp(argv[i],"--")==0 ) dashdash = 1;
-    }
-  }
-  return -1;
-}
-
-static char emsg[] = "Command line syntax error: ";
-
-/*
-** Process a flag command line argument.
-*/
-static int handleflags(int i, FILE *err, void *arg)
-{
-  int v;
-  int errcnt = 0;
-  int j;
-  for(j=0; op[j].label; j++){
-    if( strncmp(&argv[i][1],op[j].label,lemonStrlen(op[j].label))==0 ) break;
-  }
-  v = argv[i][0]=='-' ? 1 : 0;
-  if( op[j].label==0 ){
-    if( err ){
-      fprintf(err,"%sundefined option.\n",emsg);
-      errline(i,1,err);
-    }
-    errcnt++;
-  }else if( op[j].arg==0 ){
-    /* Ignore this option */
-  }else if( op[j].type==OPT_FLAG ){
-    *((int*)op[j].arg) = v;
-  }else if( op[j].type==OPT_FFLAG ){
-    (*(void(*)(int,void *))(op[j].arg))(v, arg);
-  }else if( op[j].type==OPT_FSTR ){
-    (*(void(*)(char *,void *))(op[j].arg))(&argv[i][2], arg);
-  }else{
-    if( err ){
-      fprintf(err,"%smissing argument on switch.\n",emsg);
-      errline(i,1,err);
-    }
-    errcnt++;
-  }
-  return errcnt;
-}
-
-/*
-** Process a command line switch which has an argument.
-*/
-static int handleswitch(int i, FILE *err, void *arg)
-{
-  int lv = 0;
-  double dv = 0.0;
-  char *sv = 0, *end;
-  char *cp;
-  int j;
-  int errcnt = 0;
-  cp = strchr(argv[i],'=');
-  assert( cp!=0 );
-  *cp = 0;
-  for(j=0; op[j].label; j++){
-    if( strcmp(argv[i],op[j].label)==0 ) break;
-  }
-  *cp = '=';
-  if( op[j].label==0 ){
-    if( err ){
-      fprintf(err,"%sundefined option.\n",emsg);
-      errline(i,0,err);
-    }
-    errcnt++;
-  }else{
-    cp++;
-    switch( op[j].type ){
-      case OPT_FLAG:
-      case OPT_FFLAG:
-        if( err ){
-          fprintf(err,"%soption requires an argument.\n",emsg);
-          errline(i,0,err);
-        }
-        errcnt++;
-        break;
-      case OPT_DBL:
-      case OPT_FDBL:
-        dv = strtod(cp,&end);
-        if( *end ){
-          if( err ){
-            fprintf(err,
-               "%sillegal character in floating-point argument.\n",emsg);
-            errline(i,(int)((char*)end-(char*)argv[i]),err);
-          }
-          errcnt++;
-        }
-        break;
-      case OPT_INT:
-      case OPT_FINT:
-        lv = strtol(cp,&end,0);
-        if( *end ){
-          if( err ){
-            fprintf(err,"%sillegal character in integer argument.\n",emsg);
-            errline(i,(int)((char*)end-(char*)argv[i]),err);
-          }
-          errcnt++;
-        }
-        break;
-      case OPT_STR:
-      case OPT_FSTR:
-        sv = cp;
-        break;
-    }
-    switch( op[j].type ){
-      case OPT_FLAG:
-      case OPT_FFLAG:
-        break;
-      case OPT_DBL:
-        *(double*)(op[j].arg) = dv;
-        break;
-      case OPT_FDBL:
-        (*(void(*)(double, void *))(op[j].arg))(dv, arg);
-        break;
-      case OPT_INT:
-        *(int*)(op[j].arg) = lv;
-        break;
-      case OPT_FINT:
-        (*(void(*)(int, void *))(op[j].arg))((int)lv, arg);
-        break;
-      case OPT_STR:
-        *(char**)(op[j].arg) = sv;
-        break;
-      case OPT_FSTR:
-        (*(void(*)(char *, void *))(op[j].arg))(sv, arg);
-        break;
-    }
-  }
-  return errcnt;
-}
-
-int OptInit(char **a, struct s_options *o, FILE *err, void *arg)
-{
-  int errcnt = 0;
-  argv = a;
-  op = o;
-  errstream = err;
-  if( argv && *argv && op ){
-    int i;
-    for(i=1; argv[i]; i++){
-      if( argv[i][0]=='+' || argv[i][0]=='-' ){
-        errcnt += handleflags(i,err,arg);
-      }else if( strchr(argv[i],'=') ){
-        errcnt += handleswitch(i,err,arg);
-      }
-    }
-  }
-  if( errcnt>0 ){
-    fprintf(err,"Valid command line options for \"%s\" are:\n",*a);
-    OptPrint();
-    exit(1);
-  }
-  return 0;
-}
-
-int OptNArgs(){
-  int cnt = 0;
-  int dashdash = 0;
-  int i;
-  if( argv!=0 && argv[0]!=0 ){
-    for(i=1; argv[i]; i++){
-      if( dashdash || !ISOPT(argv[i]) ) cnt++;
-      if( strcmp(argv[i],"--")==0 ) dashdash = 1;
-    }
-  }
-  return cnt;
-}
-
-char *OptArg(int n)
-{
-  int i;
-  i = argindex(n);
-  return i>=0 ? argv[i] : 0;
-}
-
-void OptErr(int n)
-{
-  int i;
-  i = argindex(n);
-  if( i>=0 ) errline(i,0,errstream);
-}
-
-void OptPrint(){
-  int i;
-  int max, len;
-  max = 0;
-  for(i=0; op[i].label; i++){
-    len = lemonStrlen(op[i].label) + 1;
-    switch( op[i].type ){
-      case OPT_FLAG:
-      case OPT_FFLAG:
-        break;
-      case OPT_INT:
-      case OPT_FINT:
-        len += 9;       /* length of "<integer>" */
-        break;
-      case OPT_DBL:
-      case OPT_FDBL:
-        len += 6;       /* length of "<real>" */
-        break;
-      case OPT_STR:
-      case OPT_FSTR:
-        len += 8;       /* length of "<string>" */
-        break;
-    }
-    if( len>max ) max = len;
-  }
-  for(i=0; op[i].label; i++){
-    switch( op[i].type ){
-      case OPT_FLAG:
-      case OPT_FFLAG:
-        fprintf(errstream,"  -%-*s  %s\n",max,op[i].label,op[i].message);
-        break;
-      case OPT_INT:
-      case OPT_FINT:
-        fprintf(errstream,"  -%s<integer>%*s  %s\n",op[i].label,
-          (int)(max-lemonStrlen(op[i].label)-9),"",op[i].message);
-        break;
-      case OPT_DBL:
-      case OPT_FDBL:
-        fprintf(errstream,"  -%s<real>%*s  %s\n",op[i].label,
-          (int)(max-lemonStrlen(op[i].label)-6),"",op[i].message);
-        break;
-      case OPT_STR:
-      case OPT_FSTR:
-        fprintf(errstream,"  -%s<string>%*s  %s\n",op[i].label,
-          (int)(max-lemonStrlen(op[i].label)-8),"",op[i].message);
-        break;
-    }
-  }
 }
 /*********************** From the file "parse.c" ****************************/
 /*

@@ -1536,21 +1536,27 @@ static void ext_getopt_usage(char *argv0, size_t noptions, const struct ext_opti
 // and the index of the first non-option arg.
 static int ext_getopt_long(int argc, char **argv, const struct ext_option *opts)
 {
-    size_t noptions = ({ const struct ext_option *o = opts; size_t i = 0; for (; o && o->help; ++i, ++o) { } i; });
+    size_t noptions = ({ const struct ext_option *o = opts; size_t i = 0; for (; o && o->help; ++i, ++o) { } i; }), usedopts = 0;
     size_t maxshort = ((noptions * 3) + 2) * sizeof(char);
     char *short_opts = calloc(1, maxshort);
     struct option *getopt_opts = calloc(noptions + 1, sizeof(struct option));
     
     strlcat(short_opts, ":", maxshort);
     for (size_t i = 0; i < noptions; ++i) {
-        getopt_opts[i].name = opts[i].longname;
-        getopt_opts[i].has_arg = opts[i].has_arg;
-        getopt_opts[i].flag = NULL,
-        getopt_opts[i].val = 0x100 + i;
+        if (opts[i].longname) {
+            getopt_opts[usedopts].name = opts[i].longname;
+            getopt_opts[usedopts].has_arg = opts[i].has_arg;
+            getopt_opts[usedopts].flag = NULL,
+            getopt_opts[usedopts].val = 0x100 + i;
+            usedopts++;
+        }
         strlcatc(short_opts, opts[i].shortname, maxshort);
         if (getopt_opts[i].has_arg != no_argument) {
             strlcatc(short_opts, ':', maxshort);
         }
+#if DEBUG
+        fprintf(stderr, "option has name %c / %s\n", opts[i].shortname ?: ' ', opts[i].longname);
+#endif
     }
     
     int opt = 0;
@@ -1579,6 +1585,9 @@ static int ext_getopt_long(int argc, char **argv, const struct ext_option *opts)
         }
         opt -= 0x100;
         assert(opt < noptions);
+#if DEBUG
+        fprintf(stderr, "opt is %d (%c %s)\n", opt, opts[opt].shortname, opts[opt].longname);
+#endif
         switch (opts[opt].action) {
             case oa_ignore: // do nothing
                 break;

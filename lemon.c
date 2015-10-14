@@ -1441,14 +1441,23 @@ void ErrorMsg(const char *filename, int lineno, const char *format, ...){
 /* Report an out-of-memory condition and abort.  This function
 ** is used mostly by the "MemoryCheck" macro in struct.h
 */
-void memory_error(){
-  fprintf(stderr,"Out of memory.  Aborting...\n");
-  exit(1);
+void memory_error()
+{
+    fprintf(stderr,"Out of memory.  Aborting...\n");
+    exit(1);
 }
 
-/* This routine is called with the argument to each -D command-line option.
-** Add the macro defined to the azDefine array.
+/* forward reference */
+static const char *minimum_size_type(int lwr, int upr, int *pnByte);
+
+/* Print a single line of the "Parser Stats" output
 */
+static void stats_line(const char *zLabel, int iValue)
+{
+    int nLabel = lemonStrlen(zLabel);
+    printf("  %s%.*s %5d\n", zLabel,
+            35-nLabel, "................................",
+            iValue);
 }
 
 enum ext_opt_action { oa_store_flag = 0, oa_dup_string, oa_append_strarray, oa_callback, oa_usage, oa_ignore };
@@ -1679,106 +1688,109 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-  /* Initialize the machine */
-  Strsafe_init();
-  Symbol_init();
-  State_init();
-  lem.argv0 = argv[0];
-  lem.basisflag = basisflag;
-  lem.nolinenosflag = nolinenosflag;
-  Symbol_new("$");
-  lem.errsym = Symbol_new("error");
-  lem.errsym->useCnt = 0;
+    int i;
+    int exitcode;
 
-  /* Parse the input file */
-  Parse(&lem);
-  if( lem.errorcnt ) exit(lem.errorcnt);
-  if( lem.nrule==0 ){
-    fprintf(stderr,"Empty grammar.\n");
-    exit(1);
-  }
+    /* Initialize the machine */
+    Strsafe_init();
+    Symbol_init();
+    State_init();
+    lem.argv0 = argv[0];
     lem.filename = argv[argind];
+    lem.basisflag = basisflag;
+    lem.nolinenosflag = nolinenosflag;
+    Symbol_new("$");
+    lem.errsym = Symbol_new("error");
+    lem.errsym->useCnt = 0;
 
-  /* Count and index the symbols of the grammar */
-  Symbol_new("{default}");
-  lem.nsymbol = Symbol_count();
-  lem.symbols = Symbol_arrayof();
-  for(i=0; i<lem.nsymbol; i++) lem.symbols[i]->index = i;
-  qsort(lem.symbols,lem.nsymbol,sizeof(struct symbol*), Symbolcmpp);
-  for(i=0; i<lem.nsymbol; i++) lem.symbols[i]->index = i;
-  while( lem.symbols[i-1]->type==MULTITERMINAL ){ i--; }
-  assert( strcmp(lem.symbols[i-1]->name,"{default}")==0 );
-  lem.nsymbol = i - 1;
-  for(i=1; isupper(lem.symbols[i]->name[0]); i++);
-  lem.nterminal = i;
+    /* Parse the input file */
+    Parse(&lem);
+    if( lem.errorcnt ) exit(lem.errorcnt);
+    if( lem.nrule==0 ){
+        fprintf(stderr,"Empty grammar.\n");
+        exit(1);
+    }
 
-  /* Generate a reprint of the grammar, if requested on the command line */
-  if( rpflag ){
-    Reprint(&lem);
-  }else{
-    /* Initialize the size for all follow and first sets */
-    SetSize(lem.nterminal+1);
+    /* Count and index the symbols of the grammar */
+    Symbol_new("{default}");
+    lem.nsymbol = Symbol_count();
+    lem.symbols = Symbol_arrayof();
+    for(i=0; i<lem.nsymbol; i++) lem.symbols[i]->index = i;
+    qsort(lem.symbols,lem.nsymbol,sizeof(struct symbol*), Symbolcmpp);
+    for(i=0; i<lem.nsymbol; i++) lem.symbols[i]->index = i;
+    while( lem.symbols[i-1]->type==MULTITERMINAL ){ i--; }
+    assert( strcmp(lem.symbols[i-1]->name,"{default}")==0 );
+    lem.nsymbol = i - 1;
+    for(i=1; isupper(lem.symbols[i]->name[0]); i++);
+    lem.nterminal = i;
 
-    /* Find the precedence for every production rule (that has one) */
-    FindRulePrecedences(&lem);
+    /* Generate a reprint of the grammar, if requested on the command line */
+    if( rpflag ){
+        Reprint(&lem);
+    }else{
+        /* Initialize the size for all follow and first sets */
+        SetSize(lem.nterminal+1);
 
-    /* Compute the lambda-nonterminals and the first-sets for every
-    ** nonterminal */
-    FindFirstSets(&lem);
+        /* Find the precedence for every production rule (that has one) */
+        FindRulePrecedences(&lem);
 
-    /* Compute all LR(0) states.  Also record follow-set propagation
-    ** links so that the follow-set can be computed later */
-    lem.nstate = 0;
-    FindStates(&lem);
-    lem.sorted = State_arrayof();
+        /* Compute the lambda-nonterminals and the first-sets for every
+        ** nonterminal */
+        FindFirstSets(&lem);
 
-    /* Tie up loose ends on the propagation links */
-    FindLinks(&lem);
+        /* Compute all LR(0) states.  Also record follow-set propagation
+        ** links so that the follow-set can be computed later */
+        lem.nstate = 0;
+        FindStates(&lem);
+        lem.sorted = State_arrayof();
 
-    /* Compute the follow set of every reducible configuration */
-    FindFollowSets(&lem);
+        /* Tie up loose ends on the propagation links */
+        FindLinks(&lem);
 
-    /* Compute the action tables */
-    FindActions(&lem);
+        /* Compute the follow set of every reducible configuration */
+        FindFollowSets(&lem);
 
-    /* Compress the action tables */
-    if( compress==0 ) CompressTables(&lem);
+        /* Compute the action tables */
+        FindActions(&lem);
 
-    /* Reorder and renumber the states so that states with fewer choices
-    ** occur at the end.  This is an optimization that helps make the
-    ** generated parser tables smaller. */
-    if( noResort==0 ) ResortStates(&lem);
+        /* Compress the action tables */
+        if( compress==0 ) CompressTables(&lem);
 
-    /* Generate a report of the parser generated.  (the "y.output" file) */
-    if( !quiet ) ReportOutput(&lem);
+        /* Reorder and renumber the states so that states with fewer choices
+        ** occur at the end.  This is an optimization that helps make the
+        ** generated parser tables smaller. */
+        if( noResort==0 ) ResortStates(&lem);
 
-    /* Generate the source code for the parser */
-    ReportTable(&lem, mhflag);
+        /* Generate a report of the parser generated.  (the "y.output" file) */
+        if( !quiet ) ReportOutput(&lem);
 
-    /* Produce a header file for use by the scanner.  (This step is
-    ** omitted if the "-m" option is used because makeheaders will
-    ** generate the file for us.) */
-    if( !mhflag ) ReportHeader(&lem);
-  }
-  if( statistics ){
-    printf("Parser statistics:\n");
-    stats_line("terminal symbols", lem.nterminal);
-    stats_line("non-terminal symbols", lem.nsymbol - lem.nterminal);
-    stats_line("total symbols", lem.nsymbol);
-    stats_line("rules", lem.nrule);
-    stats_line("states", lem.nxstate);
-    stats_line("conflicts", lem.nconflict);
-    stats_line("action table entries", lem.nactiontab);
-    stats_line("total table size (bytes)", lem.tablesize);
-  }
-  if( lem.nconflict > 0 ){
-    fprintf(stderr,"%d parsing conflicts.\n",lem.nconflict);
-  }
+        /* Generate the source code for the parser */
+        ReportTable(&lem, mhflag);
 
-  /* return 0 on success, 1 on failure. */
-  exitcode = ((lem.errorcnt > 0) || (lem.nconflict > 0)) ? 1 : 0;
-  exit(exitcode);
-  return (exitcode);
+        /* Produce a header file for use by the scanner.  (This step is
+        ** omitted if the "-m" option is used because makeheaders will
+        ** generate the file for us.) */
+        if( !mhflag ) ReportHeader(&lem);
+    }
+    if( statistics ){
+        printf("Parser statistics:\n");
+        stats_line("terminal symbols", lem.nterminal);
+        stats_line("non-terminal symbols", lem.nsymbol - lem.nterminal);
+        stats_line("total symbols", lem.nsymbol);
+        stats_line("rules", lem.nrule);
+        stats_line("states", lem.nxstate);
+        stats_line("conflicts", lem.nconflict);
+        stats_line("action table entries", lem.nactiontab);
+        stats_line("total table size (bytes)", lem.tablesize);
+    }
+    if( lem.nconflict > 0 ){
+        fprintf(stderr,"%d parsing conflicts.\n",lem.nconflict);
+    }
+
+    /* return 0 on success, 1 on failure. */
+    exitcode = ((lem.errorcnt > 0) || (lem.nconflict > 0)) ? 1 : 0;
+    exit(exitcode);
+    return (exitcode);
 }
 /******************** From the file "msort.c" *******************************/
 /*

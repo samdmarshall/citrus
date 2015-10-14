@@ -195,7 +195,7 @@ void Plink_delete(struct plink *);
 /********** From the file "report.h" *************************************/
 void Reprint(struct lemon *);
 void ReportOutput(struct lemon *);
-void ReportTable(struct lemon *, int);
+void ReportTable(struct lemon *);
 void ReportHeader(struct lemon *);
 void CompressTables(struct lemon *);
 void ResortStates(struct lemon *);
@@ -1633,7 +1633,6 @@ int main(int argc, char **argv)
     int compress = 0;
     int quiet = 0;
     int statistics = 0;
-    int mhflag = 0;
     int nolinenosflag = 0;
     int noResort = 0;
 
@@ -1649,22 +1648,14 @@ int main(int argc, char **argv)
             "Don't compress the action table." },
         { 'D', NULL,                    required_argument,  oa_append_strarray, { .strarray = { .strcount = &lem.nDefine, .strs = &lem.azDefine } },
             "Define a %ifdef macro." },
-        { 'f', NULL,                    required_argument,  oa_ignore,          { NULL },
-            "(Placeholder for -f compiler options.)" },
         { 'g', "reprint-grammar",       no_argument,        oa_store_flag,      { .flag = &rpflag },
             "Print grammar without actions." },
         { 'i', "header-out",            required_argument,  oa_dup_string,      { .str = &lem.houtput },
             "Output path for header file (if any)." },
-        { 'I', NULL,                    required_argument,  oa_ignore,          { NULL },
-            "(Placeholder for -I compiler options.)" },
-        { 'm', "makeheaders",           no_argument,        oa_store_flag,      { .flag = &mhflag },
-            "Output a makeheaders-compatible file." },
         { 'l', "no-line-directives",    no_argument,        oa_store_flag,      { .flag = &nolinenosflag },
             "Do not output #line statements in the parser." },
         { 'o', "source-out",            required_argument,  oa_dup_string,      { .str = &lem.soutput },
             "Output path for generated parser." },
-        { 'O', NULL,                    required_argument,  oa_ignore,          { NULL },
-            "(Placeholder for -O compiler options.)" },
         { 'p', "precendence-conflicts", no_argument,        oa_store_flag,      { .flag = &lem.showPrecConflict },
             "Show conflicts resolved by precedence rules." },
         { 'q', "quiet",                 no_argument,        oa_store_flag,      { .flag = &quiet },
@@ -1675,14 +1666,12 @@ int main(int argc, char **argv)
             "Output path for report (if any)." },
         { 's', "show-statistics",       no_argument,        oa_store_flag,      { .flag = &statistics },
             "Print parser statistics to stdout." },
-        { 'x', "version",               no_argument,        oa_store_flag,      { .flag = &version },
+        { 'V', "version",               no_argument,        oa_store_flag,      { .flag = &version },
             "Print the Citrus/Lemon version and exit." },
         { 'h', "help",                  no_argument,        oa_usage,           { NULL },
             "Show this help message." },
         { 'T', "template",              required_argument,  oa_dup_string,      { .str = &lem.template },
             "Specify a parser template file." },
-        { 'W', NULL,                    required_argument,  oa_ignore,          { NULL },
-            "(Placeholder for -W compiler options." },
         { 0, NULL, no_argument, oa_ignore, { NULL }, NULL },
     };
     int argind = ext_getopt_long(argc, argv, options);
@@ -1774,12 +1763,10 @@ int main(int argc, char **argv)
         if( !quiet ) ReportOutput(&lem);
 
         /* Generate the source code for the parser */
-        ReportTable(&lem, mhflag);
+        ReportTable(&lem);
 
-        /* Produce a header file for use by the scanner.  (This step is
-        ** omitted if the "-m" option is used because makeheaders will
-        ** generate the file for us.) */
-        if( !mhflag ) ReportHeader(&lem);
+        /* Produce a header file for use by the scanner. */
+        ReportHeader(&lem);
     }
     if( statistics ){
         printf("Parser statistics:\n");
@@ -3474,8 +3461,7 @@ PRIVATE void emit_code(
 void print_stack_union(
   FILE *out,                  /* The output stream */
   struct lemon *lemp,         /* The main info structure for this parser */
-  int *plineno,               /* Pointer to the line number */
-  int mhflag                  /* True if generating makeheaders output */
+  int *plineno                /* Pointer to the line number */
 ){
   int lineno = *plineno;    /* The line number of the output */
   char **types;             /* A hash table of datatypes */
@@ -3566,10 +3552,8 @@ void print_stack_union(
   /* Print out the definition of YYTOKENTYPE and YYMINORTYPE */
   name = lemp->name ? lemp->name : "Parse";
   lineno = *plineno;
-  if( mhflag ){ fprintf(out,"#if INTERFACE\n"); lineno++; }
   fprintf(out,"#define %sTOKENTYPE %s\n",name,
     lemp->tokentype?lemp->tokentype:"void*");  lineno++;
-  if( mhflag ){ fprintf(out,"#endif\n"); lineno++; }
   fprintf(out,"typedef union {\n"); lineno++;
   fprintf(out,"  int yyinit;\n"); lineno++;
   fprintf(out,"  %sTOKENTYPE yy0;\n",name); lineno++;
@@ -3668,8 +3652,7 @@ static void writeRuleText(FILE *out, struct rule *rp){
 
 /* Generate C source code for the parser */
 void ReportTable(
-  struct lemon *lemp,
-  int mhflag     /* Output in makeheaders format if true */
+  struct lemon *lemp
 ){
   FILE *out, *in;
   char line[LINESIZE];
@@ -3708,25 +3691,6 @@ void ReportTable(
 
   /* Generate the include code, if any */
   tplt_print(out,lemp,lemp->include,&lineno);
-  if( mhflag ){
-    char *incName = file_makename(lemp, ".h");
-    fprintf(out,"#include \"%s\"\n", incName); lineno++;
-    free(incName);
-  }
-  tplt_xfer(lemp->name,in,out,&lineno);
-
-  /* Generate #defines for all tokens */
-  if( mhflag ){
-    const char *prefix;
-    fprintf(out,"#if INTERFACE\n"); lineno++;
-    if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
-    else                    prefix = "";
-    for(i=1; i<lemp->nterminal; i++){
-      fprintf(out,"#define %s%-30s %2d\n",prefix,lemp->symbols[i]->name,i);
-      lineno++;
-    }
-    fprintf(out,"#endif\n"); lineno++;
-  }
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate the defines */
@@ -3739,7 +3703,7 @@ void ReportTable(
     fprintf(out,"#define YYWILDCARD %d\n",
        lemp->wildcard->index); lineno++;
   }
-  print_stack_union(out,lemp,&lineno,mhflag);
+  print_stack_union(out,lemp,&lineno);
   fprintf(out, "#ifndef YYSTACKDEPTH\n"); lineno++;
   if( lemp->stacksize ){
     fprintf(out,"#define YYSTACKDEPTH %s\n",lemp->stacksize);  lineno++;
@@ -3747,9 +3711,6 @@ void ReportTable(
     fprintf(out,"#define YYSTACKDEPTH 100\n");  lineno++;
   }
   fprintf(out, "#endif\n"); lineno++;
-  if( mhflag ){
-    fprintf(out,"#if INTERFACE\n"); lineno++;
-  }
   name = lemp->name ? lemp->name : "Parse";
   if( lemp->arg && lemp->arg[0] ){
     i = lemonStrlen(lemp->arg);
@@ -3766,9 +3727,6 @@ void ReportTable(
     fprintf(out,"#define %sARG_PDECL\n",name);  lineno++;
     fprintf(out,"#define %sARG_FETCH\n",name); lineno++;
     fprintf(out,"#define %sARG_STORE\n",name); lineno++;
-  }
-  if( mhflag ){
-    fprintf(out,"#endif\n"); lineno++;
   }
   if( lemp->errsym->useCnt ){
     fprintf(out,"#define YYERRORSYMBOL %d\n",lemp->errsym->index); lineno++;

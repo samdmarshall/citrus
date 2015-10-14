@@ -5,22 +5,6 @@
 ** in the input grammar file. */
 #include <stdio.h>
 %%
-/* Next is all token values, in a form suitable for use by makeheaders.
-** This section will be null unless lemon is run with the -m switch.
-*/
-/* 
-** These constants (all generated automatically by the parser generator)
-** specify the various kinds of tokens (terminals) that the parser
-** understands. 
-**
-** Each symbol here is a terminal symbol in the grammar.
-*/
-%%
-/* Make sure the INTERFACE macro is defined.
-*/
-#ifndef INTERFACE
-# define INTERFACE 1
-#endif
 /* The next thing included is series of defines which control
 ** various aspects of the generated parser.
 **    YYCODETYPE         is the data type used for storing terminal

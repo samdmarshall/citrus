@@ -28,5 +28,17 @@
 "[LEMON_TEMPLATE_PATH]-name" = "Lemon Template File";
 "[LEMON_TEMPLATE_PATH]-description" = "Path to template file to use with lemon. This defaults to the file that comes with the Citrus plugin. [-T,--template]";
 
+"[LEMON_TEMPLATE_SOURCE_EXTENSION_CUSTOM]-name" = "Custom Output Source File Extension";
+"[LEMON_TEMPLATE_SOURCE_EXTENSION_CUSTOM]-description" = "Use to specify a custom extension for the output source file. Use this to specify an option not included in LEMON_TEMPLATE_SOURCE_EXTENSION.";
+
+"[LEMON_TEMPLATE_SOURCE_EXTENSION]-name" = "Output Source File Extension";
+"[LEMON_TEMPLATE_SOURCE_EXTENSION]-description" = "Use to specify the extension of the output source file.";
+
+"[LEMON_TEMPLATE_HEADER_EXTENSION_CUSTOM]-name" = "Custom Output Header File Extension";
+"[LEMON_TEMPLATE_HEADER_EXTENSION_CUSTOM]-description" = "Use to specify a custom extension for the output header file. Use this to specify an option not included in LEMON_TEMPLATE_HEADER_EXTENSION.";
+
+"[LEMON_TEMPLATE_HEADER_EXTENSION]-name" = "Output Header File Extension";
+"[LEMON_TEMPLATE_HEADER_EXTENSION]-description" = "Use to specify the extension of the output header file.";
+
 "[LEMON_FLAGS]-name" = "Other Lemon Flags";
 "[LEMON_FLAGS]-description" = "Space-separated list of additional flags to pass to lemon.  Be sure to backslash-escape any arguments that contain spaces or special characters (e.g. path names that may contain spaces).  Use this setting if Xcode does not already provide UI for a lemon flag.";

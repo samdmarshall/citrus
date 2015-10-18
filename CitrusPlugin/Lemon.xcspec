@@ -10,17 +10,20 @@
 	Architectures = (
 		i386,
 		"x86_64",
+		armv6,
+		armv7,
+		arm64,
 	);
 	RuleName = "lemon $(InputFile)";
 	ExecDescription = "Lemon $(InputFile)";
 	ProgressDescription = "Squeezing $(CommandProgressByType) files";
-	CommandLine = "$(USER_LIBRARY_DIR)/Application\\ Support/Developer/Shared/Xcode/Plug-ins/CitrusPlugin.xcplugin/Contents/Resources/lemon --source-out $(DERIVED_FILE_DIR)/$(InputFileBase).mm --header-out $(DERIVED_FILE_DIR)/$(InputFileBase).h [options] $(InputFile)";
+	CommandLine = "$(USER_LIBRARY_DIR)/Application\\ Support/Developer/Shared/Xcode/Plug-ins/CitrusPlugin.xcplugin/Contents/Resources/lemon --source-out $(DERIVED_FILE_DIR)/$(InputFileBase).$(LEMON_TEMPLATE_SOURCE_EXTENSION) --header-out $(DERIVED_FILE_DIR)/$(InputFileBase).$(LEMON_TEMPLATE_HEADER_EXTENSION) [options] $(InputFile)";
 	SynthesizeBuildRule = YES;
 	"MightNotEmitAllOutputs" = YES;
 	"OutputsAreSourceFiles" = YES;
 	Outputs = (
-		"$(DERIVED_FILE_DIR)/$(InputFileBase).h",
-		"$(DERIVED_FILE_DIR)/$(InputFileBase).mm",
+		"$(DERIVED_FILE_DIR)/$(InputFileBase).$(LEMON_TEMPLATE_HEADER_EXTENSION)",
+		"$(DERIVED_FILE_DIR)/$(InputFileBase).$(LEMON_TEMPLATE_SOURCE_EXTENSION)",
 	);
 	Options = (
 		{
@@ -36,10 +39,53 @@
 			};
 		},
 		{
+			Name = "LEMON_TEMPLATE_SOURCE_EXTENSION_CUSTOM";
+			Type = String;
+			Category = BuildOptions;
+			DefaultValue = "";
+		},
+		{
+			Name = "LEMON_TEMPLATE_SOURCE_EXTENSION";
+			Type = Enumeration;
+			Category = BuildOptions;
+			AppearsAfter = LEMON_TEMPLATE_SOURCE_EXTENSION_CUSTOM;
+			AllowedValues = (
+				"c",
+				"cpp",
+				"m",
+				"mm",
+				"$(LEMON_TEMPLATE_SOURCE_EXTENSION_CUSTOM)",
+			);
+			DefaultValue = "c";
+		},
+		{
+			Name = "LEMON_TEMPLATE_HEADER_EXTENSION_CUSTOM";
+			Type = String;
+			Category = BuildOptions;
+			DefaultValue = "";
+		},
+		{
+			Name = "LEMON_TEMPLATE_HEADER_EXTENSION";
+			Type = Enumeration;
+			Category = BuildOptions;
+			AppearsAfter = LEMON_TEMPLATE_HEADER_EXTENSION_CUSTOM;
+			AllowedValues = (
+				"h",
+				"hpp",
+				"$(LEMON_TEMPLATE_HEADER_EXTENSION_CUSTOM)",
+			);
+			DefaultValue = "h";
+		},
+		{
+			Name = "LEMON_DEFAULT_TEMPLATE_PATH";
+			Type = Path;
+			DefaultValue = "$(USER_LIBRARY_DIR)/Application Support/Developer/Shared/Xcode/Plug-ins/CitrusPlugin.xcplugin/Contents/Resources/lempar.c";
+		},
+		{
 			Name = "LEMON_TEMPLATE_PATH";
 			Type = Path;
 			Category = BuildOptions;
-			DefaultValue = "$(USER_LIBRARY_DIR)/Application Support/Developer/Shared/Xcode/Plug-ins/CitrusPlugin.xcplugin/Contents/Resources/lempar.c";
+			DefaultValue = "$(LEMON_DEFAULT_TEMPLATE_PATH)";
 			CommandLineFlag = "--template";
 		},
 		{

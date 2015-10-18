@@ -4,6 +4,27 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>citrus</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>Lemon Source</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSIsAppleDefaultForType</key>
+			<true/>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.darkrainfall.citrus.lemon-source</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconFile</key>
@@ -36,16 +57,14 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSPrincipalClass</key>
 	<string>CitrusPlugin</string>
-	<key>XC4Compatible</key>
-	<true/>
-	<key>XCPluginHasUI</key>
-	<false/>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
-				<string>public.text</string>
+				<string>public.yacc-source</string>
+				<string>public.source-code</string>
+				<string>public.objective-c-plus-plus-source</string>
 			</array>
 			<key>UTTypeDescription</key>
 			<string>Lemon Source</string>
@@ -60,24 +79,9 @@
 			</dict>
 		</dict>
 	</array>
-	<key>CFBundleDocumentTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>citrus</string>
-			</array>
-			<key>CFBundleTypeName</key>
-			<string>Lemon Source</string>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>LSIsAppleDefaultForType</key>
-			<true/>
-			<key>LSItemContentTypes</key>
-			<array>
-				<string>org.darkrainfall.citrus.lemon-source</string>
-			</array>
-		</dict>
-	</array>
+	<key>XC4Compatible</key>
+	<true/>
+	<key>XCPluginHasUI</key>
+	<false/>
 </dict>
 </plist>

@@ -24,3 +24,8 @@ Why not just wrap `lemon` in a shell script and use my own template file? Why, i
 ## License
 
 This code is presently distributed under the MIT license. See the `LICENSE` file for details. To the best of my understanding, this relicensing is permitted due to the explicit disavowing of copyright by the original Lemon code. The original work on Lemon is not mine, and I do not claim credit to the bulk of the program, nor to its operation.
+
+
+## Xcode Plugin
+
+Please see the [Plugin Usage](PluginUsage.md) file for instructions on how to build and install an Xcode plugin to provide build rules and handling of lemon files.

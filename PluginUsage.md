@@ -5,7 +5,7 @@ This plugin works in both `Xcode.app` and command line invocation of via `xcodeb
 ---
 
 ## Build and Install 
-To use the Citrus plugin for Xcode, you must first open the `CitrusPlugin.xcodeproj` file in Xcode and build the target `CitrusPlugin`. This will run a build of `lemon` (in this directory) and copy it into the plugin that is built. This plugin will be automatically installed into `~/Library/Application Support/Developer/Shared/Xcode/Plug-ins/`. Now for this plugin to take effect you must relaunch Xcode. 
+To use the Citrus plugin for Xcode, you must first open the `CitrusPlugin.xcodeproj` file in Xcode and build the target `CitrusPlugin`. This will run a build of `lemon` (in this directory) and copy it into the plugin that is built. This plugin will be automatically installed into `~/Library/Application Support/Developer/Shared/Xcode/Plug-ins/`. To load this plugin you must relaunch Xcode. 
 
 ---
 

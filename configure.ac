@@ -1,36 +1,8 @@
+#########
+# Init
 #
-# The build process allows for using a cross-compiler.  But the default
-# action is to target the same platform that we are running on.  The
-# configure script needs to discover the following properties of the 
-# build and target systems:
-#
-#    srcdir
-#
-#        The is the name of the directory that contains the
-#        "configure" shell script.  All source files are
-#        located relative to this directory.
-#
-#    bindir
-#
-#        The name of the directory where executables should be
-#        written by the "install" target of the makefile.
-#
-#    program_prefix
-#
-#        Add this prefix to the names of all executables that run
-#        on the target machine.  Default: ""
-#
-#    TARGET_EXEEXT
-#
-#        The filename extension for executables on the
-#        target platform.  "" for Unix and ".exe" for windows.
-#
-# This configure.in file is easy to reuse on other projects.  Just
-# change the argument to AC_INIT().  And disable any features that
-# you don't need (for example BLT) by erasing or commenting out
-# the corresponding code.
-#
-AC_INIT(citrus, m4_esyscmd([cat VERSION | tr -d '\n']))
+AC_INIT([citrus],m4_esyscmd(cat VERSION | tr -d '\n'))
+AM_INIT_AUTOMAKE([foreign])
 
 dnl Make sure the local VERSION file matches this configure script
 citrus_version_sanity_check=`cat $srcdir/VERSION | tr -d '\n'`
@@ -83,10 +55,10 @@ AC_SUBST(VERSION_NUMBER)
 
 #########
 # check for debug enabled
-AC_ARG_ENABLE(debug, AC_HELP_STRING([--enable-debug],[enable debugging]),
+AC_ARG_ENABLE(debug, AS_HELP_STRING([--enable-debug],[enable debugging]),
       [use_debug=$enableval],[use_debug=no])
 if test "${use_debug}" = "yes" ; then
-  TARGET_DEBUG="-DCITRUS_DEBUG=1"
+  TARGET_DEBUG="-DDEBUG=1"
 else
   TARGET_DEBUG="-DNDEBUG"
 fi
@@ -100,8 +72,9 @@ AC_CONFIG_HEADERS(config.h)
 # Generate the output files.
 #
 AC_SUBST(BUILD_CFLAGS)
-AC_OUTPUT([
+AC_CONFIG_FILES([
 Makefile
 citrus.pc
 version.h
 ])
+AC_OUTPUT

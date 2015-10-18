@@ -1,0 +1,64 @@
+{
+	Identifier = "org.darkrainfall.citrus.generator";
+	Type = Compiler;
+	Name = Lemon;
+	Description = "Lemon Parser Generator";
+	InputFileTypes = (
+		"sourcecode.lemon",
+	);
+	"IsArchitectureNeutral" = YES;
+	Architectures = (
+		i386,
+		"x86_64",
+	);
+	RuleName = "lemon $(InputFile)";
+	ExecDescription = "Lemon $(InputFile)";
+	ProgressDescription = "Squeezing $(CommandProgressByType) files";
+	CommandLine = "$(USER_LIBRARY_DIR)/Application\\ Support/Developer/Shared/Xcode/Plug-ins/CitrusPlugin.xcplugin/Contents/Resources/lemon --source-out $(DERIVED_FILE_DIR)/$(InputFileBase).mm --header-out $(DERIVED_FILE_DIR)/$(InputFileBase).h [options] $(InputFile)";
+	SynthesizeBuildRule = YES;
+	"MightNotEmitAllOutputs" = YES;
+	"OutputsAreSourceFiles" = YES;
+	Outputs = (
+		"$(DERIVED_FILE_DIR)/$(InputFileBase).h",
+		"$(DERIVED_FILE_DIR)/$(InputFileBase).mm",
+	);
+	Options = (
+		{
+			Name = "LEMON_GENERATE_REPORT";
+			Type = bool;
+			DefaultValue = NO;
+			Category = BuildOptions;
+			CommandLineArgs = {
+				YES = ();
+				NO = (
+					"--quiet",
+				);
+			};
+		},
+		{
+			Name = "LEMON_TEMPLATE_PATH";
+			Type = Path;
+			Category = BuildOptions;
+			DefaultValue = "$(USER_LIBRARY_DIR)/Application Support/Developer/Shared/Xcode/Plug-ins/CitrusPlugin.xcplugin/Contents/Resources/lempar.c";
+			CommandLineFlag = "--template";
+		},
+		{
+			Name = "LEMON_COMPRESS_ACTION_TABLE";
+			Type = bool;
+			DefaultValue = YES;
+			Category = BuildOptions;
+			CommandLineArgs = {
+				YES = ();
+				NO = (
+					"--no-compress",
+				);
+			};
+		},
+		{
+			Name = "LEMON_FLAGS";
+			Type = StringList;
+			DefaultValue = "";
+			Category = BuildOptions;
+		},
+	);
+}

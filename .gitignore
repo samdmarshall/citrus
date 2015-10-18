@@ -18,3 +18,10 @@ lemon.dSYM
 ltmain.sh
 missing
 version.h
+*.o
+.deps/
+stamp-h1
+*.in~
+
+build/
+xcuserdata/

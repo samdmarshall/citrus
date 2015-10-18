@@ -1,0 +1,32 @@
+/**
+    Lemon build task
+    English localization
+
+    Samantha Marshall, 2015
+*/
+
+
+// Localized strings for basic info
+"Name" = "Lemon";
+"Description" = "Lemon Parser Generator";
+"Version" = "Default";
+"Vendor" = "Gwynne Raskind";
+
+// Localized strings for output-parse-info
+"OutputParseInfo-ProgressStatusFormat" = "Lemon %@";   // arg 1 is name of rule's input file
+"OutputParseInfo-MessageStatusFormat" = "Lemon %@";    // arg 1 is name of rule's input file, arg 2 is name of file containing message (@"" if unknown)
+
+
+"[BuildOptions]-category" = "Build Options";
+
+"[LEMON_GENERATE_REPORT]-name" = "Generate report from lemon";
+"[LEMON_GENERATE_REPORT]-description" = "[-q,--quiet]";
+
+"[LEMON_COMPRESS_ACTION_TABLE]-name" = "Compress lemon action table";
+"[LEMON_COMPRESS_ACTION_TABLE]-description" = "[-c,--no-compress]";
+
+"[LEMON_TEMPLATE_PATH]-name" = "Lemon Template File";
+"[LEMON_TEMPLATE_PATH]-description" = "Path to template file to use with lemon. This defaults to the file that comes with the Citrus plugin. [-T,--template]";
+
+"[LEMON_FLAGS]-name" = "Other Lemon Flags";
+"[LEMON_FLAGS]-description" = "Space-separated list of additional flags to pass to lemon.  Be sure to backslash-escape any arguments that contain spaces or special characters (e.g. path names that may contain spaces).  Use this setting if Xcode does not already provide UI for a lemon flag.";

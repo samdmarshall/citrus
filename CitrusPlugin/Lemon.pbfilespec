@@ -1,0 +1,14 @@
+(
+	{
+	    Type = FileType;
+	    Identifier = sourcecode.lemon;
+	    BasedOn = sourcecode;
+	    Name = "Lemon source files";
+	    Extensions = (citrus);
+	    ComputerLanguage = c.objcpp;
+	    Language = "xcode.lang.objcpp";
+	    AppliesToBuildRules = YES;
+	    UTI = "org.darkrainfall.citrus.lemon-source";
+		ChangesCauseDependencyGraphInvalidation = YES;
+	}
+)

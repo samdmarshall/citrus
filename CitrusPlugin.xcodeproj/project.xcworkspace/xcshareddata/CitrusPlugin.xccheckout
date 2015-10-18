@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>AF99707A-3E28-442C-8632-DFAC30A00D09</string>
+	<key>IDESourceControlProjectName</key>
+	<string>CitrusPlugin</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>6FA8785F9AEDA6B17F3305EE6F084DF239248BEE</key>
+		<string>github.com:gwynne/citrus.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>CitrusPlugin.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>6FA8785F9AEDA6B17F3305EE6F084DF239248BEE</key>
+		<string>../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>github.com:gwynne/citrus.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>6FA8785F9AEDA6B17F3305EE6F084DF239248BEE</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>6FA8785F9AEDA6B17F3305EE6F084DF239248BEE</string>
+			<key>IDESourceControlWCCName</key>
+			<string>citrus</string>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -1,6 +1,9 @@
 Makefile
+Makefile.in
+aclocal.m4
 autom4te.cache
 citrus.pc
+compile
 config.guess
 config.h
 config.h.in
@@ -8,8 +11,10 @@ config.log
 config.status
 config.sub
 configure
+depcomp
 install-sh
 lemon
 lemon.dSYM
 ltmain.sh
+missing
 version.h

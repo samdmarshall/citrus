@@ -381,6 +381,7 @@ struct lemon {
   int has_fallback;        /* True if any %fallback is seen in the grammar */
   int nolinenosflag;       /* True if #line statements should not be printed */
   char *template;          /* User template to use if not NULL */
+  char *headerTemplate;    /* User header template to use if not NULL */
   char *soutput;           /* Source output path if not NULL */
   char *houtput;           /* Header output path if not NULL */
   char *routput;           /* Report output path if not NULL */
@@ -1672,6 +1673,8 @@ int main(int argc, char **argv)
             "Show this help message." },
         { 'T', "template",              required_argument,  oa_dup_string,      { .str = &lem.template },
             "Specify a parser template file." },
+        { 'H', "header-template",       required_argument,  oa_dup_string,      { .str = &lem.headerTemplate },
+            "Specify a header template file." },
         { 0, NULL, no_argument, oa_ignore, { NULL }, NULL },
     };
     int argind = ext_getopt_long(argc, argv, options);
@@ -3127,9 +3130,59 @@ PRIVATE void tplt_xfer(char *name, FILE *in, FILE *out, int *lineno)
   }
 }
 
+/* The next function finds the header template file and opens it, returning
+** a pointer to the opened file. */
+PRIVATE FILE *tplt_header_open(struct lemon *lemp)
+{
+  static char templatename[] = "lempar.h";
+  char buf[1000];
+  FILE *in;
+  char *tpltname;
+  char *cp;
+
+  /* first, see if user specified a template filename on the command line. */
+  if (lemp->headerTemplate != 0) {
+    in = fopen(lemp->headerTemplate,"rb");
+    if( in==0 ){
+      fprintf(stderr,"Can't open the template file \"%s\".\n",
+              lemp->headerTemplate);
+      lemp->errorcnt++;
+      return 0;
+    }
+    return in;
+  }
+
+  cp = strrchr(lemp->filename,'.');
+  if( cp ){
+    lemon_sprintf(buf,"%.*s.lht",(int)(cp-lemp->filename),lemp->filename);
+  }else{
+    lemon_sprintf(buf,"%s.lht",lemp->filename);
+  }
+  if( access(buf,004)==0 ){
+    tpltname = buf;
+  }else if( access(templatename,004)==0 ){
+    tpltname = templatename;
+  }else{
+    tpltname = pathsearch(lemp->argv0,templatename,0);
+  }
+  if( tpltname==0 ){
+    fprintf(stderr,"Can't find the parser header template file \"%s\".\n",
+    templatename);
+    lemp->errorcnt++;
+    return 0;
+  }
+  in = fopen(tpltname,"rb");
+  if( in==0 ){
+    fprintf(stderr,"Can't open the header template file \"%s\".\n",templatename);
+    lemp->errorcnt++;
+    return 0;
+  }
+  return in;
+}
+
 /* The next function finds the template file and opens it, returning
 ** a pointer to the opened file. */
-PRIVATE FILE *tplt_open(struct lemon *lemp)
+PRIVATE FILE *tplt_parser_open(struct lemon *lemp)
 {
   static char templatename[] = "lempar.c";
   char buf[1000];
@@ -3139,12 +3192,6 @@ PRIVATE FILE *tplt_open(struct lemon *lemp)
 
   /* first, see if user specified a template filename on the command line. */
   if (lemp->template != 0) {
-    if( access(lemp->template,004)==-1 ){
-      fprintf(stderr,"Can't find the parser driver template file \"%s\".\n",
-        lemp->template);
-      lemp->errorcnt++;
-      return 0;
-    }
     in = fopen(lemp->template,"rb");
     if( in==0 ){
       fprintf(stderr,"Can't open the template file \"%s\".\n",
@@ -3669,7 +3716,7 @@ void ReportTable(
   int mnNtOfst, mxNtOfst;
   struct axset *ax;
 
-  in = tplt_open(lemp);
+  in = tplt_parser_open(lemp);
   if( in==0 ) return;
   if (lemp->soutput) {
     out = fopen(lemp->soutput, "wb");
@@ -4115,18 +4162,20 @@ void ReportHeader(struct lemon *lemp)
   const char *prefix;
   char line[LINESIZE];
   char pattern[LINESIZE];
-  int i;
+  int i, lineno;
 
   if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
   else                    prefix = "";
-  /* The original logic in this route will open the header for reading if it
-   * exists, read the whole thing in, and compare it with what will be generated
-   * to decide whether to rewrite it. This is doing 90% of the work of just
-   * rewriting it over again, and only makes sense in filesystems where multiple
-   * short writes are MASSIVELY more expensive than multiple short reads - an
-   * amusing proposition given how the output source file is generated.
-   * Therefore, it has been removed entirely in the citrus fork.
-  */
+
+  if( out==0 ){
+    fclose(in);
+    return;
+  }
+
+  in = tplt_header_open(lemp);
+  if( in==0 ) return;
+  lineno = 1;
+
   if (lemp->houtput) {
     out = fopen(lemp->houtput, "wb");
     if (!out) {
@@ -4139,9 +4188,17 @@ void ReportHeader(struct lemon *lemp)
     out = file_open(lemp,".h","wb");
   }
   if( out ){
+    /* Copy any leading text */
+    tplt_xfer(lemp->name,in,out,&lineno);
+    
+    /* Print tokens */
     for(i=1; i<lemp->nterminal; i++){
       fprintf(out,"#define %s%-30s %3d\n",prefix,lemp->symbols[i]->name,i);
+      ++lineno;
     }
+    
+    /* Copy any trailing text */
+    tplt_xfer(lemp->name,in,out,&lineno);
     fclose(out);  
   }
   return;
